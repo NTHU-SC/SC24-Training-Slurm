@@ -19,6 +19,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <mpi.h>
+
 #pragma message("GL; HF!")
 
 #ifndef N
@@ -35,17 +37,38 @@ typedef unsigned long long ull;
 
 int main(int argc, char *argv[])
 {
+    int rank, size;
+
+    MPI_Init(&argc, &argv);
+
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    double tik = MPI_Wtime();
+
     const ull n = argc > 1 ? strtoull(1[argv], NULL, 10) : N;
 
     long double cnt = 0;
-    for (ull i = 0; i < n; i++)
+    for (ull i = rank; i < n; i += size)
     {
         long double x = 1.l * i / n;
         cnt += 1.l / (1.l + x * x);
     }
 
-    long double sum = cnt;
-    long double pi = 4.l * sum / n;
-    printf("pi\t= %.9Lf\nAbs err\t= %.9Lf\n", pi, fabsl(pi - PI));
+    long double sum = 0;
+    MPI_Reduce(&cnt, &sum, 1, MPI_LONG_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    double tok = MPI_Wtime();
+
+    if (!rank) // rank == 0
+    {
+        long double pi = 4.l * sum / n;
+        printf("pi\t= %.9Lf\nAbs err\t= %.9Lf\n", pi, fabsl(pi - PI));
+        fprintf(stderr, "Wall time: %f\n", tok - tik);
+    }
+
+    MPI_Finalize();
     return 0;
 }
